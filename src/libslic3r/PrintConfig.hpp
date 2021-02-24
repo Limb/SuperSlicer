@@ -114,7 +114,7 @@ enum SLAMaterial {
     slamHeatResistant,
 };
 enum DenseInfillAlgo {
-    dfaAutomatic, dfaAutoNotFull, dfaEnlarged,
+    dfaAutomatic, dfaAutoNotFull, dfaAutoOrEnlarged , dfaEnlarged,
 };
 
 enum NoPerimeterUnsupportedAlgo {
@@ -298,6 +298,7 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<DenseInfillAlgo>:
     static const t_config_enum_values keys_map = {
         { "automatic", dfaAutomatic },
         { "autosmall", dfaAutoNotFull },
+        { "autoenlarged", dfaAutoOrEnlarged },
         { "enlarged", dfaEnlarged }
     };
     return keys_map;
@@ -398,7 +399,7 @@ extern const PrintConfigDef print_config_def;
 
 class StaticPrintConfig;
 
-// Minimum object distance for arrangement, based on printer technology.
+PrinterTechnology printer_technology(const ConfigBase &cfg);
 // double min_object_distance(const ConfigBase &cfg);
 
 // Slic3r dynamic configuration, used to override the configuration
@@ -1045,6 +1046,8 @@ public:
     ConfigOptionBool                gcode_comments;
     ConfigOptionEnum<GCodeFlavor>   gcode_flavor;
     ConfigOptionBool                gcode_label_objects;
+    ConfigOptionInt                 gcode_precision_xyz;
+    ConfigOptionInts                gcode_precision_e;
     ConfigOptionString              layer_gcode;
     ConfigOptionString              feature_gcode;
     ConfigOptionFloat               max_print_speed;
@@ -1153,6 +1156,8 @@ protected:
         OPT_PTR(gcode_comments);
         OPT_PTR(gcode_flavor);
         OPT_PTR(gcode_label_objects);
+        OPT_PTR(gcode_precision_xyz);
+        OPT_PTR(gcode_precision_e);
         OPT_PTR(layer_gcode);
         OPT_PTR(feature_gcode);
         OPT_PTR(max_print_speed);

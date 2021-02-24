@@ -1082,19 +1082,20 @@ namespace Slic3r {
                                             intersection_ex(sparse_polys, { upp.expolygon }, true)
                                             , (float)-layerm->flow(frInfill).scaled_width(), (float)layerm->flow(frInfill).scaled_width());
                                     if (!intersect.empty()) {
+                                        double area_intersect = 0;
+                                        // calculate area to decide if area is small enough for autofill
+                                        if (layerm->region()->config().infill_dense_algo == dfaAutoNotFull || layerm->region()->config().infill_dense_algo == dfaAutoOrEnlarged)
+                                            for (ExPolygon poly_inter : intersect)
+                                                area_intersect += poly_inter.area();
 
-                                        if (layerm->region()->config().infill_dense_algo == dfaEnlarged) {
+                                        if (layerm->region()->config().infill_dense_algo == dfaEnlarged 
+                                            || (layerm->region()->config().infill_dense_algo == dfaAutoOrEnlarged && surf.area() <= area_intersect * COEFF_SPLIT)) {
                                             //expand the area a bit
                                             intersect = offset_ex(intersect, double(scale_(layerm->region()->config().external_infill_margin.get_abs_value(
                                                 region->config().perimeters == 0 ? 0 : (layerm->flow(frExternalPerimeter).width + layerm->flow(frPerimeter).spacing() * (region->config().perimeters - 1))))));
                                         } else if (layerm->region()->config().infill_dense_algo == dfaAutoNotFull
                                             || layerm->region()->config().infill_dense_algo == dfaAutomatic) {
 
-                                            //check if area isn't too big for autonotfull
-                                            double area_intersect = 0;
-                                            if (layerm->region()->config().infill_dense_algo == dfaAutoNotFull)
-                                                for (ExPolygon poly_inter : intersect)
-                                                    area_intersect += poly_inter.area();
                                             //like intersect.empty() but more resilient
                                             if (layerm->region()->config().infill_dense_algo == dfaAutomatic
                                                 || surf.area() > area_intersect * COEFF_SPLIT) {

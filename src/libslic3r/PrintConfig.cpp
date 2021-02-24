@@ -710,7 +710,7 @@ void PrintConfigDef::init_fff_params()
     def->cli = "top-fill-pattern|external-fill-pattern=s";
     def->enum_keys_map = &ConfigOptionEnum<InfillPattern>::get_enum_values();
     def->enum_values.push_back("rectilinear");
-    def->enum_values.push_back("monotonicgapfillgapfill");
+    def->enum_values.push_back("monotonicgapfill");
     def->enum_values.push_back("monotonic");
     def->enum_values.push_back("concentric");
     def->enum_values.push_back("concentricgapfill");
@@ -1876,6 +1876,20 @@ void PrintConfigDef::init_fff_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBool(1));
 
+    def = this->add("gcode_precision_xyz", coInt);
+    def->label = L("xyz decimals");
+    def->category = OptionCategory::output;
+    def->tooltip = L("Choose how many digit after the dot for xyz coordinates.");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionInt(3));
+
+    def = this->add("gcode_precision_e", coInts);
+    def->label = L("Extruder decimals");
+    def->category = OptionCategory::output;
+    def->tooltip = L("Choose how many digit after the dot for extruder moves.");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionInts{ 5 });
+
     def = this->add("high_current_on_filament_swap", coBool);
     def->label = L("High extruder current on filament swap");
     def->category = OptionCategory::general;
@@ -2048,12 +2062,14 @@ void PrintConfigDef::init_fff_params()
     def->enum_keys_map = &ConfigOptionEnum<DenseInfillAlgo>::get_enum_values();
     def->enum_values.push_back("automatic");
     def->enum_values.push_back("autosmall");
+    def->enum_values.push_back("autoenlarged");
     def->enum_values.push_back("enlarged");
     def->enum_labels.push_back(L("Automatic"));
     def->enum_labels.push_back(L("Automatic, only for small areas"));
+    def->enum_labels.push_back(L("Automatic, or anchored if too big"));
     def->enum_labels.push_back(L("Anchored"));
     def->mode = comAdvanced;
-    def->set_default_value(new ConfigOptionEnum<DenseInfillAlgo>(dfaAutoNotFull));
+    def->set_default_value(new ConfigOptionEnum<DenseInfillAlgo>(dfaAutoOrEnlarged));
 
     def = this->add("infill_extruder", coInt);
     def->label = L("Infill extruder");
@@ -4180,6 +4196,7 @@ void PrintConfigDef::init_extruder_option_keys()
         "extruder_offset",
         "extruder_fan_offset",
         "extruder_temperature_offset",
+        "gcode_precision_e",
         "tool_name",
         "retract_length",
         "retract_lift",
@@ -5332,20 +5349,15 @@ DynamicPrintConfig* DynamicPrintConfig::new_from_defaults_keys(const std::vector
 /*
 double min_object_distance(const ConfigBase &cfg)
 {   
-    const ConfigOptionEnum<PrinterTechnology> *opt_printer_technology = cfg.option<ConfigOptionEnum<PrinterTechnology>>("printer_technology");
-    PrinterTechnology printer_technology = opt_printer_technology ? opt_printer_technology->value : ptUnknown;
-
     double ret = 0.;
-
-    if (printer_technology == ptSLA)
-        ret = 6.;
+    
+    if (printer_technology(cfg) == ptSLA) ret = 6.;
     else {
         auto ecr_opt = cfg.option<ConfigOptionFloat>("extruder_clearance_radius");
         auto dd_opt  = cfg.option<ConfigOptionFloat>("duplicate_distance");
         auto co_opt  = cfg.option<ConfigOptionBool>("complete_objects");
 
-        if (!ecr_opt || !dd_opt || !co_opt) 
-            ret = 0.;
+        if (!ecr_opt || !dd_opt || !co_opt) ret = 0.;
         else {
             // min object distance is max(duplicate_distance, clearance_radius)
             ret = (co_opt->value && ecr_opt->value > dd_opt->value) ?
@@ -5364,9 +5376,7 @@ double PrintConfig::min_object_distance() const
 
 double PrintConfig::min_object_distance(const ConfigBase *config, double ref_height /* = 0*/)
 {
-    const ConfigOptionEnum<PrinterTechnology> *opt_printer_technology = config->option<ConfigOptionEnum<PrinterTechnology>>("printer_technology");
-    PrinterTechnology printer_technology = opt_printer_technology ? opt_printer_technology->value : ptUnknown;
-    if (printer_technology == ptSLA) return 6.;
+    if (printer_technology(*config) == ptSLA) return 6.;
     
     const ConfigOptionFloat* dd_opt = config->option<ConfigOptionFloat>("duplicate_distance");
     //test if called from usaslicer::l240 where it's called on an empty config...
@@ -5432,6 +5442,21 @@ double PrintConfig::min_object_distance(const ConfigBase *config, double ref_hei
         return base_dist + std::max(skirt_dist, brim_dist);
     }
     return base_dist;
+}
+
+PrinterTechnology printer_technology(const ConfigBase &cfg)
+{
+    const ConfigOptionEnum<PrinterTechnology> *opt = cfg.option<ConfigOptionEnum<PrinterTechnology>>("printer_technology");
+    
+    if (opt) return opt->value;
+    
+    const ConfigOptionBool *export_opt = cfg.option<ConfigOptionBool>("export_sla");
+    if (export_opt && export_opt->getBool()) return ptSLA;
+    
+    export_opt = cfg.option<ConfigOptionBool>("export_gcode");
+    if (export_opt && export_opt->getBool()) return ptFFF;    
+    
+    return ptUnknown;
 }
 
 void DynamicPrintConfig::normalize_fdm()
